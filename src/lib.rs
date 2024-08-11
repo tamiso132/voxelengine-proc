@@ -3,13 +3,7 @@ extern crate proc_macro;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Path, Type};
 
-#[derive(deluxe::ExtractAttributes)]
-#[deluxe(attributes(nested))]
-struct MetaDataStructAttributes {
-    nested: String,
-}
-
-#[proc_macro_derive(Fields, attributes(nested))]
+#[proc_macro_derive(ImGuiFields, attributes(nested))]
 pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree
 
@@ -61,11 +55,15 @@ fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, id
     let ident_str = ident.to_string();
     if path.is_ident("u8") || path.is_ident("u16") || path.is_ident("u32") || path.is_ident("u64") || path.is_ident("f32") || path.is_ident("f64") {
         generated_code.push(quote! {
-            ui.input_scalar(#ident_str, &mut self.#ident);
+            ui.input_scalar(#ident_str, &mut self.#ident).build();
         });
     } else if path.is_ident("String") {
         generated_code.push(quote! {
-            ui.input_text(#ident_str, &mut self.#ident);
+            ui.input_text(#ident_str, &mut self.#ident).build();
+        });
+    } else if path.is_ident("bool") {
+        generated_code.push(quote! {
+            ui.checkbox(#ident_str, &mut self.#ident);
         });
     }
 }
@@ -75,60 +73,3 @@ fn add_nested(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, i
         self.#ident.render_imgui(&mut ui);
     });
 }
-
-// fn impl_trait_a(name: &syn::Ident, fields: Fields) -> proc_macro2::TokenStream {
-//     quote! {
-//         impl Indexable for #name {
-//             fn nfields() -> usize {
-//                 fields.len();
-//             }
-//         }
-//     }
-// }
-
-// fn process_fields(fields: &Fields) -> proc_macro2::TokenStream {
-//     let mut field_processors = Vec::new();
-
-//     for field in fields {
-//         if let Some(ident) = &field.ident {
-//             let field_name = ident.to_string();
-//             let field_type = &field.ty;
-
-//             let field_processor = match field_type {
-//                 Type::Path(type_path) => {
-//                     let path = &type_path.path;
-//                     if let Some(last_segment) = path.segments.last() {
-//                         // Check if the type is a struct (not a basic type)
-//                         if last_segment.ident != "String" && last_segment.ident != "i32" {
-//                             let nested_fields = quote! {
-//                                 println!("Field: {}, Type: {:?}", #field_name, stringify!(#path));
-//                                 // Recursively process nested fields
-//                                 // This requires more sophisticated parsing and handling
-//                             };
-//                             nested_fields
-//                         } else {
-//                             quote! {
-//                                 println!("Field: {}, Type: {:?}", #field_name, stringify!(#path));
-//                             }
-//                         }
-//                     } else {
-//                         quote! {
-//                             println!("Field: {}, Type: {:?}", #field_name, "Unknown");
-//                         }
-//                     }
-//                 }
-//                 _ => quote! {
-//                     println!("Field: {}, Type: {:?}", ident, "Unknown");
-//                 },
-//             };
-
-//             field_processors.push(field_processor);
-//         }
-//     }
-
-//     quote! {
-//         #(#field_processors)*
-//     }
-// }
-
-// fn test() {}
