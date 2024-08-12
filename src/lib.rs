@@ -55,7 +55,7 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
     let expanded = quote! {
         impl #name {
             pub fn render_imgui(&mut self, mut ui: &mut imgui::Ui) {
-                #(#generated_code)*
+                    #(#generated_code)*
             }
         }
     };
@@ -65,12 +65,19 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
 
 fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, ident: Ident, config: FieldConfigs) {
     let ident_str = ident.to_string();
-    if path.is_ident("u8") || path.is_ident("u16") || path.is_ident("u32") || path.is_ident("u64") || path.is_ident("f32") || path.is_ident("f64") || path.is_ident("usize") {
+    if path.is_ident("u8")
+        || path.is_ident("u16")
+        || path.is_ident("u32")
+        || path.is_ident("u64")
+        || path.is_ident("f32")
+        || path.is_ident("f64")
+        || path.is_ident("usize")
+    {
         if !config.slider.0 {
             generated_code.push(quote! {
                 let id = ui.push_id(#ident_str);
                 ui.text(#ident_str);
-                ui.same_line();
+                ui.same_line_with_pos(50.0);
                 ui.input_scalar("##hidden", &mut self.#ident).build();
                 id.end();
             });
@@ -83,7 +90,7 @@ fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, id
             generated_code.push(quote! {
                 let id = ui.push_id(#ident_str);
                 ui.text(#ident_str);
-                ui.same_line();
+                ui.same_line_with_pos(50.0);
                 ui.slider("##", #min, #max, &mut self.#ident);
                 id.end();
             });
@@ -92,7 +99,7 @@ fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, id
         generated_code.push(quote! {
             let id = ui.push_id(#ident_str);
             ui.text(#ident_str);
-            ui.same_line();
+            ui.same_line_with_pos(50.0);
             ui.input_text("##hidden", &mut self.#ident).build();
             id.end();
         });
@@ -100,7 +107,7 @@ fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, path: &Path, id
         generated_code.push(quote! {
             let id = ui.push_id(#ident_str);
             ui.text(#ident_str);
-            ui.same_line();
+            ui.same_line_with_pos(50.0);
             ui.checkbox("##hidden", &mut self.#ident);
             id.end();
         });
