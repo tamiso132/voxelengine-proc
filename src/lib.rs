@@ -1,5 +1,5 @@
 extern crate proc_macro;
-
+mod bevy_stuff;
 use proc_macro2::Literal;
 use quote::quote;
 use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, Lit, Meta, NestedMeta, Path, Type};
@@ -9,7 +9,7 @@ struct FieldConfigs {
     pub slider: (bool, Option<Literal>, Option<Literal>),
 }
 
-#[proc_macro_derive(ImGuiFields, attributes(nested, slider))]
+#[proc_macro_derive(ImGuiFields, attributes(nested, slider, ignore_field))]
 pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Parse the input tokens into a syntax tree
 
@@ -29,17 +29,25 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
 
     for field in struct_.fields.iter() {
         let mut config = FieldConfigs::default();
-
+        let mut ignore = false;
         for attribute in field.attrs.iter() {
             if attribute.path.is_ident("slider") {
                 parse_slider_attribute(&mut config, &attribute);
             }
+            if attribute.path.is_ident("ignore_field") {
+                ignore = true;
+            }
+        }
+
+        if ignore {
+            continue;
         }
 
         let ident = field.ident.clone().unwrap();
+        let ident_str = ident.to_string();
 
         let nested_func = quote! {
-            self.#ident.render_imgui(&mut ui);
+            self.#ident.display_nested_imgui(ui, imgui_id, #ident_str);
         };
 
         match &field.ty {
@@ -52,11 +60,15 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
         }
     }
     let expanded = quote! {
-        impl #name {
-            pub fn render_imgui(&mut self, ui: &mut imgui::Ui) {
-                    #(#generated_code)*
+            impl TImguiRender for #name {
+              fn display_imgui(&mut self, ui: &mut imgui::Ui, imgui_id: &mut ImguiId) {
+                        #(#generated_code)*
+                }
+
+                fn display_nested_imgui(&mut self, ui: &mut imgui::Ui, imgui_id: &mut ImguiId, ident: &str){
+                        todo!();
+                }
             }
-        }
     };
 
     proc_macro::TokenStream::from(expanded)
@@ -88,17 +100,6 @@ pub fn process_fields_derive_bevy(input: proc_macro::TokenStream) -> proc_macro:
 
         let ident = field.ident.clone().unwrap();
 
-        // let ptr = crate::editor::imgui::align_ptr(data.as_mut_ptr(), align_of::<Bar>()).cast::<Bar>();
-        // unsafe {
-        //     let value = &mut *ptr;
-        //     let ui = &mut *ui;
-        //     let v = ((&mut value.bba) as *mut String).cast::<u8>();
-
-        //     let field_vec = std::slice::from_raw_parts_mut(v, std::mem::size_of::<String>());
-
-        //     //ident::display_imgui(field_vec, ui)
-        // }
-
         let ident_ptr = Ident::new(&format!("{}_ptr", ident), ident.span());
         let ident_vec = Ident::new(&format!("{}_vec", ident), ident.span());
 
@@ -110,7 +111,7 @@ pub fn process_fields_derive_bevy(input: proc_macro::TokenStream) -> proc_macro:
 
         match &field.ty {
             Type::Path(type_path) => {
-                add_field(&mut generated_code, &target, &nested, &type_path.path, field.ident.clone().unwrap(), config);
+                bevy_stuff::add_field(&mut generated_code, &target, &nested, &type_path.path, field.ident.clone().unwrap(), config);
             }
             _ => {
                 todo!();
@@ -145,31 +146,13 @@ pub fn process_fields_derive_bevy(input: proc_macro::TokenStream) -> proc_macro:
     proc_macro::TokenStream::from(expanded)
 }
 
-fn add_field(
-    generated_code: &mut Vec<proc_macro2::TokenStream>,
-    target: &proc_macro2::TokenStream,
-    nested: &proc_macro2::TokenStream,
-    path: &Path,
-    ident: Ident,
-    config: FieldConfigs,
-) {
+fn add_field(generated_code: &mut Vec<proc_macro2::TokenStream>, target: &proc_macro2::TokenStream, nested: &proc_macro2::TokenStream, path: &Path, ident: Ident, config: FieldConfigs) {
     let ident_str = ident.to_string();
 
-    if path.is_ident("u8")
-        || path.is_ident("u16")
-        || path.is_ident("u32")
-        || path.is_ident("u64")
-        || path.is_ident("f32")
-        || path.is_ident("f64")
-        || path.is_ident("usize")
-    {
+    if path.is_ident("u8") || path.is_ident("u16") || path.is_ident("u32") || path.is_ident("u64") || path.is_ident("f32") || path.is_ident("f64") || path.is_ident("usize") {
         if !config.slider.0 {
             generated_code.push(quote! {
-                let id = ui.push_id(#ident_str);
-                ui.text(#ident_str);
-                ui.same_line_with_pos(50.0);
-                ui.input_scalar("##hidden", &mut #target.#ident).build();
-                id.end();
+                voxelengine_gui::display::display_scalar(ui, #ident_str, imgui_id, &mut #target.#ident);
             });
         } else {
             if config.slider.1.is_none() || config.slider.2.is_none() {
@@ -178,31 +161,18 @@ fn add_field(
             let min = config.slider.1.unwrap();
             let max = config.slider.2.unwrap();
             generated_code.push(quote! {
-                let id = ui.push_id(#ident_str);
-                ui.text(#ident_str);
-                ui.same_line_with_pos(50.0);
-                ui.slider("##", #min, #max, &mut #target.#ident);
-                id.end();
+                 voxelengine_gui::display::display_slider(ui, #ident_str, imgui_id, #min, #max, &mut #target.#ident);
             });
         }
     } else if path.is_ident("String") {
         generated_code.push(quote! {
-            let id = ui.push_id(#ident_str);
-            ui.text(#ident_str);
-            ui.same_line_with_pos(50.0);
-            ui.input_text("##hidden", &mut #target.#ident).build();
-            id.end();
+            voxelengine_gui::display::display_text(ui, #ident_str, imgui_id, &mut #target.#ident);
         });
     } else if path.is_ident("bool") {
         generated_code.push(quote! {
-            let id = ui.push_id(#ident_str);
-            ui.text(#ident_str);
-            ui.same_line_with_pos(50.0);
-            ui.checkbox("##hidden", &mut #target.#ident);
-            id.end();
+             voxelengine_gui::display::display_boolean(ui, #ident_str, imgui_id, &mut #target.#ident);
         });
     } else {
-        // Must be nested
         generated_code.push(quote! {
             #nested
         });
