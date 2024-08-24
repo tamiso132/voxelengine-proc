@@ -1,10 +1,12 @@
 extern crate proc_macro;
 mod bevy_stuff;
+use core::panic;
+
 use proc_macro2::Literal;
 use quote::quote;
-use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Ident, Lit, Meta, NestedMeta, Path, Type};
+use syn::{parse_macro_input, Attribute, Data, DeriveInput, Expr, ExprLit, Fields, Ident, Lit, Meta, NestedMeta, Path, Type, TypeArray, TypePath};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct FieldConfigs {
     pub slider: (bool, Option<Literal>, Option<Literal>),
 }
@@ -52,10 +54,13 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
 
         match &field.ty {
             Type::Path(type_path) => {
+                
                 add_field(&mut generated_code, &target, &nested_func, &type_path.path, field.ident.clone().unwrap(), config);
             }
+          
+
             _ => {
-                todo!();
+                panic!("Only Path is implemented");
             }
         }
     }
@@ -66,13 +71,35 @@ pub fn process_fields_derive(input: proc_macro::TokenStream) -> proc_macro::Toke
                 }
 
                 fn display_nested_imgui(&mut self, ui: &mut imgui::Ui, imgui_id: &mut ImguiId, ident: &str){
-                        todo!();
+
+                    ui.text(ident);
+
+                    #(#generated_code)*
                 }
             }
     };
 
     proc_macro::TokenStream::from(expanded)
 }
+
+// Type::Array(array_type) => {
+//     panic!("WTF");
+//     // Assuming `array_type` is of type `TypeArray`
+//     if let Expr::Lit(ExprLit { lit: Lit::Int(lit_int), .. }) = &array_type.len {
+//         let len: usize = lit_int.base10_parse().expect("Expected integer literal for array length");
+
+//         if let Type::Path(TypePath { path, .. }) = &*array_type.elem {
+//             for i in 0..len {
+//                 let s = format!("{}[{}]", ident_str, i);
+//                 let ident = Ident::new(&s, proc_macro2::Span::call_site());
+//                 panic!("Ident: {}", ident.to_string());
+//               //  add_field(&mut generated_code, &target, &nested_func, &path, ident, config.clone());
+//             }
+//         }
+//     } else {
+//         panic!("Array length is not a literal integer");
+//     }
+// }
 
 #[proc_macro_derive(BevyField, attributes(slider))]
 pub fn process_fields_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
